@@ -11,8 +11,9 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 
-def to_exec(steps, e, sigma=0):
+def to_exec(steps, e, sigma=0.0):
     # making variables global so they can be edited by select function
+    global means
     global est_reward
     global selections
 
