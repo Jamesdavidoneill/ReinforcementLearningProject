@@ -22,9 +22,9 @@ class DQN(nn.Module):
     def __init__(self, img_height, img_width):
         super().__init__()
 
-        self.fc1 = nn.Linear(in_features=img_heigh*img_width*3, out_features=24)
+        self.fc1 = nn.Linear(in_features=img_height*img_width*3, out_features=24)
         self.fc2 = nn.Linear(in_features=24, out_features=32)
-        self.out = nn.Linear(in_feartures=32, out_features=2)
+        self.out = nn.Linear(in_features=32, out_features=2)
 
     def forward(self, t):
         t = t.flatten(start_dim=1)
@@ -86,10 +86,10 @@ class Agent():
 
         if rate > random.random():
             action = random.randrange(self.num_actions)
-            return  torch.tensor([action]).to(device) #explore
+            return  torch.tensor([action]).to(self.device) #explore
         else:
             with torch.no_grad():
-                return policy_net(state).argmax(dim=1).to(device) #exploit
+                return policy_net(state).argmax(dim=1).to(self.device) #exploit
 
 
 #environment manager
@@ -112,7 +112,7 @@ class CartPoleEnvManager():
         return self.env.render(mode)
 
     def num_actions_available(self):
-        return not self.env.action_space
+        return self.env.action_space.n
 
     def take_action(self, action):
         _, reward, self.done, _=self.env.step(action.item())
@@ -169,34 +169,34 @@ class CartPoleEnvManager():
         return resize(screen).unsqueeze(0).to(self.device) #add a batch dimension
 
 #Examples of non-processed screen
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-em = CartPoleEnvManager(device)
-em.reset()
-screen = em.render('rgb_array')
+#device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+#em = CartPoleEnvManager(device)
+#em.reset()
+#screen = em.render('rgb_array')
 
-plt.figure()
-plt.imshow(screen)
-plt.title('Non-processed screen example')
-plt.show()
+#plt.figure()
+#plt.imshow(screen)
+#plt.title('Non-processed screen example')
+#plt.show()
 
 #Example of processed screen
-screen = em.get_processed_screen()
+#screen = em.get_processed_screen()
 
-plt.figure()
-plt.imshow(screen.squeeze(0).permute(1, 2, 0), interpolation='none')
-plt.title('Processed screen example')
-plt.show()
+#plt.figure()
+#plt.imshow(screen.squeeze(0).permute(1, 2, 0), interpolation='none')
+#plt.title('Processed screen example')
+#plt.show()
 
 #Example of non starting state
 
-for i in range(10):
-    em.take_action(torch.tensor([1]))
-screen = em.get_state()
+#for i in range(10):
+#    em.take_action(torch.tensor([1]))
+#screen = em.get_state()
 
-plt.figure()
-plt.imshow(screen.squeeze(0).permute(1,2,0), interpolation='none')
-plt.title('Processed screen example')
-plt.show()
+#plt.figure()
+#plt.imshow(screen.squeeze(0).permute(1,2,0), interpolation='none')
+#plt.title('Processed screen example')
+#plt.show()
 
 
 #Utility functions
@@ -205,11 +205,109 @@ def plot(values, moving_avg_period):
     plt.clf()
     plt.title('Training ...')
     plt.xlabel('Episode')
-    plt.ylable('duration')
+    plt.ylabel('duration')
     plt.plot(values)
-    plt.plot(get_moving_average(moving_avg_period, values))
+
+    moving_avg = get_moving_average(moving_avg_period, values)
+    plt.plot(moving_avg)
     plt.pause(0.001)
+    print("Episode", len(values), "\n", moving_avg_period, "episode moving avg:", moving_avg[-1])
     if is_ipython: display.clear_output(wait=True)
 
 def get_moving_average(period, values):
-    values = torch.tensor
+    values = torch.tensor(values, dtype=torch.float)
+    if len(values) >= period:
+        moving_avg = values.unfold(dimension=0, size=period, step=1).mean(dim=1).flatten(start_dim=0)
+        moving_avg = torch.cat((torch.zeros(period-1), moving_avg))
+        return moving_avg.numpy()
+    else:
+        moving_avg = torch.zeros(len(values))
+        return moving_avg.numpy()
+
+#Tensor processing
+def extract_tensors(experiences):
+    batch = Experience(*zip(*experiences))
+
+    t1 = torch.cat(batch.state)
+    t2 = torch.cat(batch.action)
+    t3 = torch.cat(batch.reward)
+    t4 = torch.cat(batch.next_state)
+
+    return (t1, t2, t3, t4)
+
+#Q-Value Calculator
+class QValues():
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    @staticmethod
+    def get_current(policy_net, states, actions):
+        return policy_net(states).gather(dim=1, index=actions.unsqueeze(-1))
+    @staticmethod
+    def get_next(target_net, next_states):
+        final_state_locations = next_states.flatten(start_dim=1).max(dim=1)[0].eq(0).type(torch.bool)
+        non_final_state_locations = (final_state_locations==False)
+        non_final_states = next_states[non_final_state_locations]
+        batch_size = next_states.shape[0]
+        values = torch.zeros(batch_size).to(QValues.device)
+        values[non_final_state_locations] = target_net(non_final_states).max(dim=1)[0].detach()
+        return values
+
+#Main program
+
+#parameters
+batch_size = 256
+gamma = 0.999
+eps_start =1
+eps_end = 0.01
+eps_decay = 0.001
+target_update = 10
+memory_size = 100000
+lr = 0.001
+num_episodes = 1000
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+em = CartPoleEnvManager(device)
+strategy = EpsilonGreedyStrategy(eps_start, eps_end, eps_decay)
+agent = Agent(strategy, em.num_actions_available(), device)
+print(em.num_actions_available())
+memory = ReplayMemory(memory_size)
+
+policy_net = DQN(em.get_screen_height(), em.get_screen_width()).to(device)
+target_net = DQN(em.get_screen_height(), em.get_screen_width()).to(device)
+target_net.load_state_dict(policy_net.state_dict())
+target_net.eval()
+optimizer = optim.Adam(params=policy_net.parameters(), lr=lr)
+
+episode_durations = []
+for episode in range(num_episodes):
+    em.reset()
+    state = em.get_state()
+
+    for timestep in count():
+        action = agent.select_action(state, policy_net)
+        reward = em.take_action(action)
+        next_state = em.get_state()
+        memory.push(Experience(state, action, next_state, reward))
+        state = next_state
+
+        if memory.can_provide_sample(batch_size):
+            experiences = memory.sample(batch_size)
+            states, actions, rewards, next_states = extract_tensors(experiences)
+
+            current_q_values = QValues.get_current(policy_net, states, actions)
+            next_q_values = QValues.get_next(target_net, next_states)
+            target_q_values = (next_q_values * gamma) + rewards
+
+            loss = F.mse_loss(current_q_values, target_q_values.unsqueeze(1))
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+        if em.done:
+            episode_durations.append(timestep)
+            plot(episode_durations, 100)
+            break
+    if episode % target_update == 0:
+        target_net.load_state_dict(policy_net.state_dict())
+em.close()
+
