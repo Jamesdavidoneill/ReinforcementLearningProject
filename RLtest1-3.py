@@ -1,3 +1,7 @@
+#testing with mario
+from nes_py.wrappers import JoypadSpace
+import gym_super_mario_bros
+from gym_super_mario_bros.actions import SIMPLE_MOVEMENT
 import gym
 import math
 import random
@@ -13,6 +17,21 @@ import torch.optim as optim
 import torch.nn.functional as F
 import torchvision.transforms as T
 
+#env = gym_super_mario_bros.make('SuperMarioBros-v0')
+
+#env = JoypadSpace(env, SIMPLE_MOVEMENT)
+
+#done = True
+#for step in range(100):
+#    if done:
+#        state = env.reset()
+#    state, reward, done, info = env.step(env.action_space.sample())
+#    env.render()
+
+#env.close()
+
+
+###########
 #Set up display
 is_ipython = 'inline' in matplotlib.get_backend()
 if is_ipython: from IPython import display
@@ -96,10 +115,14 @@ class Agent():
 class CartPoleEnvManager():
     def __init__(self, device):
         self.device = device
-        self.env = gym.make('CartPole-v0').unwrapped
+        tempenv = gym_super_mario_bros.make('SuperMarioBros-v0')
+        self.env = JoypadSpace(tempenv, SIMPLE_MOVEMENT)
+        #self.env = JoypadSpace(env, SIMPLE_MOVEMENT)
         self.env.reset()
         self.current_screen = None
         self.done = False
+        self.info = None
+        #print(self.env)
 
     def reset(self):
         self.env.reset()
@@ -112,10 +135,14 @@ class CartPoleEnvManager():
         return self.env.render(mode)
 
     def num_actions_available(self):
+        #print("num actions is ", self.env.action_space.n)
         return self.env.action_space.n
 
     def take_action(self, action):
-        _, reward, self.done, _=self.env.step(action.item())
+        _, reward, self.done, self.info = self.env.step(action.item())
+        if int(self.info['life']) < 2:
+            # Only give mario 1 life
+            self.done = True
         return torch.tensor([reward], device=self.device)
 
     def just_starting(self):
@@ -149,8 +176,8 @@ class CartPoleEnvManager():
         screen_height = screen.shape[1]
 
         #strip off top and bottom
-        top = int(screen_height * 0.4)
-        bottom = int(screen_height * 0.8)
+        top = int(screen_height * 0.25)
+        bottom = int(screen_height * 1.0)
         screen = screen[:, top:bottom, :]
         return screen
 
@@ -241,7 +268,9 @@ class QValues():
 
     @staticmethod
     def get_current(policy_net, states, actions):
-        return policy_net(states).gather(dim=1, index=actions.unsqueeze(-1))
+        #print("index is ", actions.unsqueeze(-1))
+        #changed dim 1 to dim 0
+        return policy_net(states).gather(dim=0, index=actions.unsqueeze(-1))
     @staticmethod
     def get_next(target_net, next_states):
         final_state_locations = next_states.flatten(start_dim=1).max(dim=1)[0].eq(0).type(torch.bool)
@@ -269,7 +298,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 em = CartPoleEnvManager(device)
 strategy = EpsilonGreedyStrategy(eps_start, eps_end, eps_decay)
 agent = Agent(strategy, em.num_actions_available(), device)
-print(em.num_actions_available())
+#print(em.num_actions_available())
 memory = ReplayMemory(memory_size)
 
 policy_net = DQN(em.get_screen_height(), em.get_screen_width()).to(device)
@@ -280,33 +309,66 @@ optimizer = optim.Adam(params=policy_net.parameters(), lr=lr)
 
 episode_durations = []
 for episode in range(num_episodes):
-    em.reset()
-    state = em.get_state()
+   em.reset()
+   state = em.get_state()
 
-    for timestep in count():
-        action = agent.select_action(state, policy_net)
-        reward = em.take_action(action)
-        next_state = em.get_state()
-        memory.push(Experience(state, action, next_state, reward))
-        state = next_state
+   for timestep in count():
+       action = agent.select_action(state, policy_net)
+       reward = em.take_action(action)
+       next_state = em.get_state()
+       memory.push(Experience(state, action, next_state, reward))
+       state = next_state
 
-        if memory.can_provide_sample(batch_size):
-            experiences = memory.sample(batch_size)
-            states, actions, rewards, next_states = extract_tensors(experiences)
+       if memory.can_provide_sample(batch_size):
+           experiences = memory.sample(batch_size)
+           states, actions, rewards, next_states = extract_tensors(experiences)
 
-            current_q_values = QValues.get_current(policy_net, states, actions)
-            next_q_values = QValues.get_next(target_net, next_states)
-            target_q_values = (next_q_values * gamma) + rewards
+           #print("policy net call")
+           #print("current states ", states)
+           #print("current actins", actions)
+           current_q_values = QValues.get_current(policy_net, states, actions)
+           next_q_values = QValues.get_next(target_net, next_states)
+           target_q_values = (next_q_values * gamma) + rewards
 
-            loss = F.mse_loss(current_q_values, target_q_values.unsqueeze(1))
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-        if em.done:
-            episode_durations.append(timestep)
-            plot(episode_durations, 100)
-            break
-    if episode % target_update == 0:
-        target_net.load_state_dict(policy_net.state_dict())
+           loss = F.mse_loss(current_q_values, target_q_values.unsqueeze(1))
+           optimizer.zero_grad()
+           loss.backward()
+           optimizer.step()
+           #em.render('human')
+       if em.done:
+           episode_durations.append(timestep)
+           plot(episode_durations, 100)
+           break
+   if episode % target_update == 0:
+       target_net.load_state_dict(policy_net.state_dict())
 em.close()
 
+# #Examples of non-processed screen
+# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# em = CartPoleEnvManager(device)
+# em.reset()
+# screen = em.render('rgb_array')
+#
+# plt.figure()
+# plt.imshow(screen)
+# plt.title('Non-processed screen example')
+# plt.show()
+
+#Example of processed screen
+# screen = em.get_processed_screen()
+#
+# plt.figure()
+# plt.imshow(screen.squeeze(0).permute(1, 2, 0), interpolation='none')
+# plt.title('Processed screen example')
+# plt.show()
+#
+# #Example of non starting state
+#
+# for i in range(10):
+#     em.take_action(torch.tensor([1]))
+# screen = em.get_state()
+
+#plt.figure()
+#plt.imshow(screen.squeeze(0).permute(1,2,0), interpolation='none')
+#plt.title('Processed screen example')
+#plt.show()
