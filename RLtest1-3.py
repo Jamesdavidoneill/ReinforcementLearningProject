@@ -284,6 +284,8 @@ class QValues():
 #Main program
 
 #parameters
+SAVE_PATH = "/policies/mario_policy"
+save_policy_interval = 10
 batch_size = 256
 gamma = 0.999
 eps_start =1
@@ -309,10 +311,11 @@ optimizer = optim.Adam(params=policy_net.parameters(), lr=lr)
 
 episode_durations = []
 for episode in range(num_episodes):
-   em.reset()
-   state = em.get_state()
+    print("episode", episode)
+    em.reset()
+    state = em.get_state()
 
-   for timestep in count():
+    for timestep in count():
        action = agent.select_action(state, policy_net)
        reward = em.take_action(action)
        next_state = em.get_state()
@@ -334,13 +337,16 @@ for episode in range(num_episodes):
            optimizer.zero_grad()
            loss.backward()
            optimizer.step()
-           #em.render('human')
+           em.render('human')
        if em.done:
            episode_durations.append(timestep)
            plot(episode_durations, 100)
            break
-   if episode % target_update == 0:
-       target_net.load_state_dict(policy_net.state_dict())
+    if episode % target_update == 0:
+        target_net.load_state_dict(policy_net.state_dict())
+    if episode % save_policy_interval == 0:
+        torch.save(policy_net.state_dict(), SAVE_PATH + str(episode))
+
 em.close()
 
 # #Examples of non-processed screen
