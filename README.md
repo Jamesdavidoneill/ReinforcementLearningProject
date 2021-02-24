@@ -12,7 +12,7 @@ torch
 
 torchvision
 
-gym_super_mario_bros
+gym-super-mario-bros
 
 matplotlib
 
