@@ -16,7 +16,7 @@ gym_super_mario_bros
 
 matplotlib
 
-nes_py
+nes-py
 
 ### also needed
 a folder in the same directory as RLtest1-3.py titled policies" where the program will store exported policy networks
