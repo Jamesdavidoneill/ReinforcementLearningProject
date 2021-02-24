@@ -7,10 +7,15 @@ RLtest1-3.py is the code to train mario
 
 ### packages needed:
 numpy
+
 torch
+
 torchvision
+
 gym_super_mario_bros
+
 matplotlib
+
 nes_py
 
 ### also needed
