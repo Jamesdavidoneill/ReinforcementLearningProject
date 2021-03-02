@@ -2,7 +2,6 @@
 The agent always plays o's, if its playing me I'll play x's.
 This program declares the Board class and can detect wins, losses and draws given a board object.
 x's are 1's and o's are 2'su
-# TODO Link it to a GUI for manual play
 """
 from numpy import base_repr
 import copy
@@ -27,26 +26,26 @@ class Board:
 
     def __init__(self, number):
         self.number = number
-        self.string = list(rebase(number).zfill(9))
-        symmetrise = []
+        self.string = rebase(number).zfill(9)
+        self.mutable = list(self.string)
+
+        flips = []
         for sym in symmetries:
-            new_list = [0] * 9
-            for j in range(9):
-                new_list[sym[j]] = self.string[j]
-            symmetrise.append(rebase(''.join([str(i) for i in new_list]), False))
-        # symmetrise stores the entire equivalence class of this board.
-        self.symmetrise = symmetrise
+            flips.append(list(multi(sym, self.mutable)))
+        # flips stores the entire equivalence class of this board.
+        self.flips = flips
 
     def __eq__(self, other):
-        for new_list in self.symmetrise:
-            if new_list == other.number:
+        for new_list in self.flips:
+            if ''.join(new_list) == other.string:
                 return True
         return False
 
     def valuer(self, layout):
         # Checks if the given layout has player's x's winning
+        # Use self.flips instead
         for k in symmetries:
-            now = Board(multi(k, layout)).string
+            now = list(multi(k, layout))
             for j in wins:
 
                 anded = [int(now[m] == '1' and j[m] == 1) for m in range(9)]
@@ -58,31 +57,31 @@ class Board:
         return False
 
     def win_lose(self):
-        if self.valuer(self.string):
+        if self.valuer(self.mutable):
             return 'lose'
         # converts to check if o's have won
-        elif self.valuer([str(int(m == '2')) for m in self.string]):
+        elif self.valuer([str(int(m == '2')) for m in self.mutable]):
             return 'win'
-        elif '0' not in self.string:
+        elif '0' not in self.mutable:
             return 'draw'
         else:
             return 'even'
 
     def actions(self, o=True):
-        # x asks whether the computer is playing x's(True) or o's (False)
+        # o asks whether actions are to be given for o's (True) or x's (False)
         ret_list = []
-        for i in range(len(self.string)):
-            if self.string[i] == '0':
-                a = copy.deepcopy(self.string)
+        for i in range(len(self.mutable)):
+            if self.mutable[i] == '0':
+                a = copy.deepcopy(self.mutable)
                 a[i] = str(int(o) + 1)
                 b = rebase(''.join(a), direction=False)
                 ret_list.append(Board(b))
         return ret_list
 
     def __str__(self):
-        line_1 = "|".join(self.between(self.string[0:3]))
-        line_2 = "|".join(self.between(self.string[3:6]))
-        line_3 = "|".join(self.between(self.string[6:9]))
+        line_1 = "|".join(self.between(self.mutable[0:3]))
+        line_2 = "|".join(self.between(self.mutable[3:6]))
+        line_3 = "|".join(self.between(self.mutable[6:9]))
 
         return "\n".join([line_1, line_2, line_3])
 
@@ -111,25 +110,28 @@ def initializer():
     for board_init in range(3**9):
         board = Board(board_init)
 
+        # Boards with inappropraite numbers of x's or o's are ignored
+        if abs(board.mutable.count('1') - board.mutable.count('2')) > 1:
+            continue
+
         # Boards are equivalent to their transformations under the symmetries of a square. This allows me to store
         # fewer boards.
         # Check the 8 transformations.
-        if abs(board.string.count('1')-board.string.count('2')) > 1:
-            continue
-
-        if check_in(board, layouts)[0]:
+        if check_in(board)[0]:
             continue
 
         # Preference index will always be 1 if win and 0 is draw or lose, so those aren't included in layouts.
-        if board.win_lose()=='win':
-            layouts[board.number]=1
+        if board.win_lose() == 'win':
+            layouts[board.string] = 1
             continue
         if board.win_lose() in ['lose', 'draw']:
-            layouts[board.number]=0
+            layouts[board.string] = 0
             continue
 
-        # Initialize all board preferences to 0.5, indexing them by their number 0<=n<19,683.
-        layouts[board.number] = 0.5
+        # Initialize all other board preferences to 0.5, indexing them by a base 3 string
+        if len(board.string) < 9:
+            print("Length less than 9", board.string)
+        layouts[board.string] = 0.5
     # How many I'm storing.
     print("Length of layouts is ", len(layouts))
 
@@ -146,21 +148,20 @@ def rebase(number, direction=True):
     return counter
 
 
-def check_in(board, dictionary):
+def check_in(board):
+    global layouts
     # Checks if the equivalence class of a board is included in the dictionary already.
-    for hash_1 in board.symmetrise:
+    for hash_1 in board.flips:
         # print(''.join(hash_1))
-        if hash_1 in dictionary:
-            return [True, hash_1]
-    return [False]
+        if ''.join(hash_1) in layouts:
+            return [True, ''.join(hash_1)]
+    return [False, None]
 
 
 def multi(sym, board):
-    # board is list and sym is just a list
+    # board is list of strings and sym is just a list
     new_board = ['0'] * 9
-    # print(board.number)
-    # print(board, len(board))
     for k in range(9):
         new_board[k] = board[sym[k]]
     # Returns int(new_board)
-    return rebase(''.join(new_board), False)
+    return ''.join(new_board)

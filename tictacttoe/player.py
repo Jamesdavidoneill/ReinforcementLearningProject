@@ -1,8 +1,6 @@
 from initializer import *
 from numpy import random
 
-counter = []
-
 
 def random_player(board, o=False):
     # plays tictactoe randomly, no policy.
@@ -16,38 +14,47 @@ def random_player(board, o=False):
 
 def rand_enhance(board, o=False):
     actions = board.actions(o)
-    for act in actions:
-        for sym in symmetries:
-            acsy = multi(sym, act.string)
-            if Board(acsy).win_lose() == 'lose':
-                return act
-    act = actions[random.randint(len(actions))]
-    return act
+    prefs = [0.5] * len(actions)
+    for i in range(len(actions)):
+        # for sym in symmetries:
+        #     acsy = multi(sym, act.mutable)
+        if actions[i].win_lose() == 'lose' and o:
+            prefs[i] = 1
+        elif actions[i].win_lose() == 'win' and not o:
+            prefs[i] = 0
+        elif actions[i].win_lose() == 'draw':
+            prefs[i] = 0
+    maxes2 = [k for k in range(len(prefs)) if prefs[k] == max(prefs)]
+    try:
+        option = maxes2[random.randint(len(maxes2))]
+    except ValueError:
+        option = 0
+    return actions[option]
 
 
 def reinforce(board, e=0.1):
-    # if learn=True then update layouts
+    #  always plays o's
     global layouts
+    # look for available actions
     actions = board.actions(True)
     crit = random.rand()
-    counter.append(crit)
     if crit < e:
         # take non greedy action => don't update the previous preference
         action = actions[random.randint(len(actions))]
-        for i in symmetries:
-            if multi(i, action.string) in layouts:
-                action_alt = multi(i, action.string)
+        in_bool, action_alt = check_in(action)
+        if not in_bool:
+            print("PROBLEM 1")
+
     else:
         prefs = []
         alts = []
+        # Try all the actions and all their symmetries to find their layouts score
         for i in actions:
-            for j in symmetries:
-                if multi(j, i.string) in layouts:
-                    prefs.append(layouts[multi(j, i.string)])
-                    alts.append(multi(j, i.string))
-                    break
-        # if len(prefs) != len(actions):
-        #     print('problem, len=', len(prefs), len(actions))
+            in_bool, actual = check_in(i)
+            if not in_bool:
+                print("PROBLEM 2")
+            prefs.append(layouts[actual])
+            alts.append(actual)
 
         maxes2 = [k for k in range(len(prefs)) if prefs[k] == max(prefs)]
 
@@ -63,8 +70,11 @@ def reinforce(board, e=0.1):
     return action, action_alt, crit < e
 
 
-def contained(board):
-    # checks what permutation of a board is contained in layouts
-    for i in range(len(symmetries)):
-        if symmetries[i] * board in layouts:
-            return i
+def asker(current):
+    # Where can I put my x's
+    actions = current.actions(False)
+    for i in range(len(actions)):
+        print(i, str(layouts[check_in(actions[i])[1]]), '\n' + str(actions[i]))
+    board = actions[int(input("Enter your choice: "))]
+
+    return board
