@@ -174,11 +174,15 @@ class CartPoleEnvManager():
 
     def crop_screen(self, screen):
         screen_height = screen.shape[1]
+        screen_width = screen.shape[2]
 
         #strip off top and bottom
         top = int(screen_height * 0.25)
-        bottom = int(screen_height * 1.0)
-        screen = screen[:, top:bottom, :]
+        bottom = int(screen_height * 0.9)
+        left = int(screen_width * 0.33)
+        right = int(screen_width * 1.0)
+
+        screen = screen[:, top:bottom, left:right]
         return screen
 
     def transform_screen_data(self, screen):
@@ -284,7 +288,7 @@ class QValues():
 #Main program
 
 #parameters
-SAVE_PATH = "/policies/mario_policy"
+SAVE_PATH = "./policies/mario_policy"
 save_policy_interval = 10
 batch_size = 256
 gamma = 0.999
@@ -311,6 +315,7 @@ optimizer = optim.Adam(params=policy_net.parameters(), lr=lr)
 
 episode_durations = []
 for episode in range(num_episodes):
+
     print("episode", episode)
     em.reset()
     state = em.get_state()
@@ -337,7 +342,7 @@ for episode in range(num_episodes):
            optimizer.zero_grad()
            loss.backward()
            optimizer.step()
-           em.render('human')
+           #em.render('human')
        if em.done:
            episode_durations.append(timestep)
            plot(episode_durations, 100)
@@ -345,11 +350,11 @@ for episode in range(num_episodes):
     if episode % target_update == 0:
         target_net.load_state_dict(policy_net.state_dict())
     if episode % save_policy_interval == 0:
-        torch.save(policy_net.state_dict(), SAVE_PATH + str(episode))
+        torch.save(policy_net.state_dict(), SAVE_PATH + str(episode) +".pt")
 
 em.close()
 
-# #Examples of non-processed screen
+# # #Examples of non-processed screen
 # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # em = CartPoleEnvManager(device)
 # em.reset()
@@ -359,8 +364,8 @@ em.close()
 # plt.imshow(screen)
 # plt.title('Non-processed screen example')
 # plt.show()
-
-#Example of processed screen
+#
+# #Example of processed screen
 # screen = em.get_processed_screen()
 #
 # plt.figure()
@@ -373,8 +378,8 @@ em.close()
 # for i in range(10):
 #     em.take_action(torch.tensor([1]))
 # screen = em.get_state()
-
-#plt.figure()
-#plt.imshow(screen.squeeze(0).permute(1,2,0), interpolation='none')
-#plt.title('Processed screen example')
-#plt.show()
+#
+# plt.figure()
+# plt.imshow(screen.squeeze(0).permute(1,2,0), interpolation='none')
+# plt.title('Processed screen example')
+# plt.show()
