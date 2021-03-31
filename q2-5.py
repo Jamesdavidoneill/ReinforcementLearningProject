@@ -52,5 +52,8 @@ def select(e):
 plt.plot(range(2000), to_exec(2000, 0, 0.01), 'g-', label='e=0')
 plt.plot(range(2000), to_exec(2000, 0.01, 0.01), 'r-', label='e=0.01')
 plt.plot(range(2000), to_exec(2000, 0.1, 0.01), 'b-', label='e=0.1')
+plt.title("10-Armed Bandit")
+plt.xlabel("Steps")
+plt.ylabel("Reward")
 plt.legend(loc="lower right")
 plt.show()
