@@ -42,7 +42,7 @@ class DQN(nn.Module):
 
         self.fc1 = nn.Linear(in_features=img_height*img_width*3, out_features=24)
         self.fc2 = nn.Linear(in_features=24, out_features=32)
-        self.out = nn.Linear(in_features=32, out_features=2)
+        self.out = nn.Linear(in_features=32, out_features=7)
 
     def forward(self, t):
         t = t.flatten(start_dim=1)
@@ -299,7 +299,7 @@ agent = Agent(strategy, em.num_actions_available(), device)
 
 
 #load policy network
-PATH = "mario_policy_net.pt"
+PATH = "policies/mario_policy950"
 
 policy_net = DQN(em.get_screen_height(), em.get_screen_width())
 policy_net.load_state_dict(torch.load(PATH))

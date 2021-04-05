@@ -212,7 +212,7 @@ def plot(values, moving_avg_period):
     plt.plot(moving_avg)
     plt.pause(0.001)
     print("Episode", len(values), "\n", moving_avg_period, "episode moving avg:", moving_avg[-1])
-    if is_ipython: display.clear_output(wait=True)
+    #if is_ipython: display.clear_output(wait=True)
 
 def get_moving_average(period, values):
     values = torch.tensor(values, dtype=torch.float)
@@ -241,6 +241,11 @@ class QValues():
 
     @staticmethod
     def get_current(policy_net, states, actions):
+        print("This is where the issue is")
+        print("dim = ", 1, "index =", actions.unsqueeze(-1))
+        print("--------------------")
+        #print(policy_net(states))
+        print(actions)
         return policy_net(states).gather(dim=1, index=actions.unsqueeze(-1))
     @staticmethod
     def get_next(target_net, next_states):
@@ -269,6 +274,10 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 em = CartPoleEnvManager(device)
 strategy = EpsilonGreedyStrategy(eps_start, eps_end, eps_decay)
 agent = Agent(strategy, em.num_actions_available(), device)
+##test code
+print("number agent actions.")
+print(agent.num_actions)
+##
 print(em.num_actions_available())
 memory = ReplayMemory(memory_size)
 
@@ -302,6 +311,7 @@ for episode in range(num_episodes):
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+            screen = em.render('human')
         if em.done:
             episode_durations.append(timestep)
             plot(episode_durations, 100)

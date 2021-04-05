@@ -43,7 +43,7 @@ class DQN(nn.Module):
 
         self.fc1 = nn.Linear(in_features=img_height*img_width*3, out_features=24)
         self.fc2 = nn.Linear(in_features=24, out_features=32)
-        self.out = nn.Linear(in_features=32, out_features=2)
+        self.out = nn.Linear(in_features=32, out_features=7)
 
     def forward(self, t):
         t = t.flatten(start_dim=1)
@@ -112,7 +112,7 @@ class Agent():
 
 
 #environment manager
-class CartPoleEnvManager():
+class MarioEnvManager():
     def __init__(self, device):
         self.device = device
         tempenv = gym_super_mario_bros.make('SuperMarioBros-v0')
@@ -122,6 +122,8 @@ class CartPoleEnvManager():
         self.current_screen = None
         self.done = False
         self.info = None
+        #tuple storing mario position at a particular time
+        self.snapshot = (1, -10)
         #print(self.env)
 
     def reset(self):
@@ -143,7 +145,32 @@ class CartPoleEnvManager():
         if int(self.info['life']) < 2:
             # Only give mario 1 life
             self.done = True
+
+        #Check if mario standing still too long
+        time =  self.info['time']
+        newxPos = int(self.info['x_pos'])
+
+
+        if time % 2 == 0:
+            if time != self.snapshot[0]:
+                print("current time is")
+                print(time)
+                print(newxPos)
+                #Check if mario's x position has changed every 2 seconds
+                if np.abs(self.snapshot[1] - newxPos) < 3:
+                    #mario stayed still too long
+                    #kill him
+                    self.kill_agent()
+                else:
+                    #mario is changing position: he gets to live
+
+                    #update current xposition
+                    self.snapshot = (time, newxPos)
         return torch.tensor([reward], device=self.device)
+
+    def kill_agent(self):
+        #Kill mario
+        self.done = True
 
     def just_starting(self):
         return self.current_screen is None
@@ -174,15 +201,11 @@ class CartPoleEnvManager():
 
     def crop_screen(self, screen):
         screen_height = screen.shape[1]
-        screen_width = screen.shape[2]
 
         #strip off top and bottom
         top = int(screen_height * 0.25)
-        bottom = int(screen_height * 0.9)
-        left = int(screen_width * 0.33)
-        right = int(screen_width * 1.0)
-
-        screen = screen[:, top:bottom, left:right]
+        bottom = int(screen_height * 1.0)
+        screen = screen[:, top:bottom, :]
         return screen
 
     def transform_screen_data(self, screen):
@@ -260,6 +283,7 @@ def extract_tensors(experiences):
     batch = Experience(*zip(*experiences))
 
     t1 = torch.cat(batch.state)
+    t1 = torch.cat(batch.state)
     t2 = torch.cat(batch.action)
     t3 = torch.cat(batch.reward)
     t4 = torch.cat(batch.next_state)
@@ -274,7 +298,13 @@ class QValues():
     def get_current(policy_net, states, actions):
         #print("index is ", actions.unsqueeze(-1))
         #changed dim 1 to dim 0
-        return policy_net(states).gather(dim=0, index=actions.unsqueeze(-1))
+        #original line:
+        #return policy_net(states).gather(dim=1, index=actions.unsqueeze(-1))
+        #print("This is where the issue is")
+        #print("dim = ", 1, "index =",actions.unsqueeze(-1))
+        #print("--------------------")
+        #print(policy_net(states))
+        return policy_net(states).gather(dim=1, index=actions.unsqueeze(-1))
     @staticmethod
     def get_next(target_net, next_states):
         final_state_locations = next_states.flatten(start_dim=1).max(dim=1)[0].eq(0).type(torch.bool)
@@ -288,7 +318,7 @@ class QValues():
 #Main program
 
 #parameters
-SAVE_PATH = "./policies/mario_policy"
+SAVE_PATH = "policies/mario_policy"
 save_policy_interval = 10
 batch_size = 256
 gamma = 0.999
@@ -301,9 +331,13 @@ lr = 0.001
 num_episodes = 1000
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-em = CartPoleEnvManager(device)
+em = MarioEnvManager(device)
 strategy = EpsilonGreedyStrategy(eps_start, eps_end, eps_decay)
 agent = Agent(strategy, em.num_actions_available(), device)
+##test code
+#print("number agent actions.")
+#print(agent.num_actions)
+##
 #print(em.num_actions_available())
 memory = ReplayMemory(memory_size)
 
@@ -313,9 +347,9 @@ target_net.load_state_dict(policy_net.state_dict())
 target_net.eval()
 optimizer = optim.Adam(params=policy_net.parameters(), lr=lr)
 
+
 episode_durations = []
 for episode in range(num_episodes):
-
     print("episode", episode)
     em.reset()
     state = em.get_state()
@@ -342,7 +376,7 @@ for episode in range(num_episodes):
            optimizer.zero_grad()
            loss.backward()
            optimizer.step()
-           #em.render('human')
+           em.render('human')
        if em.done:
            episode_durations.append(timestep)
            plot(episode_durations, 100)
@@ -350,11 +384,11 @@ for episode in range(num_episodes):
     if episode % target_update == 0:
         target_net.load_state_dict(policy_net.state_dict())
     if episode % save_policy_interval == 0:
-        torch.save(policy_net.state_dict(), SAVE_PATH + str(episode) +".pt")
+        torch.save(policy_net.state_dict(), SAVE_PATH + str(episode))
 
 em.close()
 
-# # #Examples of non-processed screen
+# #Examples of non-processed screen
 # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # em = CartPoleEnvManager(device)
 # em.reset()
@@ -364,8 +398,8 @@ em.close()
 # plt.imshow(screen)
 # plt.title('Non-processed screen example')
 # plt.show()
-#
-# #Example of processed screen
+
+#Example of processed screen
 # screen = em.get_processed_screen()
 #
 # plt.figure()
@@ -378,8 +412,8 @@ em.close()
 # for i in range(10):
 #     em.take_action(torch.tensor([1]))
 # screen = em.get_state()
-#
-# plt.figure()
-# plt.imshow(screen.squeeze(0).permute(1,2,0), interpolation='none')
-# plt.title('Processed screen example')
-# plt.show()
+
+#plt.figure()
+#plt.imshow(screen.squeeze(0).permute(1,2,0), interpolation='none')
+#plt.title('Processed screen example')
+#plt.show()
