@@ -11,7 +11,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 from nes_py.wrappers import JoypadSpace
-from gym_super_mario_bros.actions import SIMPLE_MOVEMENT
+from gym_super_mario_bros.actions import RIGHT_ONLY
 from PIL import Image
 from collections import namedtuple
 from itertools import count
@@ -23,7 +23,7 @@ import torchvision.transforms as trans
 
 
 env = gym.make('SuperMarioBros-v2')
-env = JoypadSpace(env, SIMPLE_MOVEMENT)
+env = JoypadSpace(env, RIGHT_ONLY)
 # if gpu is to be used
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 

@@ -266,15 +266,15 @@ def optimize_model():
 	optimizer.step()
 
 num_episodes = 1000
+episode_frames = 200
 for i_episode in range(num_episodes):
-
+	print("episode", i_episode)
 	# Initialize the environment and state
 	env.reset()
 	last_screen = get_screen()
 	current_screen = get_screen()
 	state = current_screen - last_screen
-	for t in count():
-		print("frame: ", t)
+	for t in range(episode_frames):
 		# Select and perform an action
 		action = select_action(state)
 		_, reward, done, _ = env.step(action.item())
