@@ -266,9 +266,9 @@ for i_episode in range(num_episodes):
     # Update the target network, copying all weights and biases in DQN
     if i_episode % TARGET_UPDATE == 0:
         target_net.load_state_dict(policy_net.state_dict())
-    print("This many episodes are complete:", i_episode, old_x, t)
+    print(f"{i_episode} episodes are complete, mario has progressed {old_x} to the right, and {t} frames have occurred.")
 b = time.perf_counter()
-print(f"Took {b-a} seconds to run {num_episodes} episodes.")
+print(f"Took {int(b-a)} seconds to run {num_episodes} episodes.")
 print('Complete')
 plot_rewards()
 env.close()
