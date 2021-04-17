@@ -5,22 +5,18 @@ import curses
 import time
 
 
-def to_train(label, steps=600, a=0.2, e=0.2, opponent=random_player, save=False):
-    # If rand_policy is True we just train the algo vs the random player
-    # randomplayer plays with o's if o=True
+def to_train(label, steps=600, a=0.02, e=0.2, opponent=random_player, save=False):
+    """ This function finds the action-values through playing against a chosen opponent with Sarsa learning"""
     global rewards1
     global rewards2
     initializer()
 
-    # current = Board(0)
     rewards1 = []
     rewards2 = []
     for i in range(steps):
-        play1(a, e, opponent)
-        play2(a, e, opponent)
-
-    # plt.plot(range(steps), [sum(rewards2[max(0, i - 100):i]) / 100 for i in range(steps)])
-
+        play1(a, e, reinforce, opponent, 0, True)
+        play1(a, e, opponent, reinforce, 1, False)
+    print(rewards1, rewards2)
     # for the one starting
     plt.plot(range(5, steps), [sum(rewards1[:i]) / (i + 1) for i in range(5, steps)], "r", label="agent starts")
     # for the not starting one
@@ -36,6 +32,7 @@ def to_train(label, steps=600, a=0.2, e=0.2, opponent=random_player, save=False)
 
 
 def random_play1(label, steps=600, save=False, agent=random_player, opponent=random_player):
+    """For playing one agent against another without training it."""
     global rewards3
     global rewards4
     rewards3 = []
@@ -44,8 +41,6 @@ def random_play1(label, steps=600, save=False, agent=random_player, opponent=ran
         rewards3.append(rando([agent, opponent], True))
         rewards4.append(rando([agent, opponent], False))
 
-    # print(rewards3)
-    # print(rewards4)
     plt.plot(range(5, steps), [sum(rewards3[:i]) / (i + 1) for i in range(5, steps)], "r", label="agent starts")
     plt.plot(range(5, steps), [sum(rewards4[:i]) / (i + 1) for i in range(5, steps)], "b", label="opponent starts")
     plt.title(label)
@@ -63,86 +58,37 @@ def rando(ops, first):
     current = Board(0)
     while True:
         current = ops[int(not first)](current, first)
-        # print(current)
+        if decider(current, old_alt=0, ):
+            current = ops[int(first)](current, not first)
         state1 = current.win_lose()
-        # print(current, state1)
         if state1 in ['win', 'lose', 'draw']:
-            # print("APPEND 1", int(state1 == 'win'))
-            return int(state1 == 'win')
-        current = ops[int(first)](current, not first)
-        # print(current)
-        state1 = current.win_lose()
-        # print(current, state1)
-        if state1 in ['win', 'lose', 'draw']:
-            # print("APPEND 2", int(state1 == 'win'))
             return int(state1 == 'win')
 
 
-def play1(a, e, opponent):
-    global layouts
-    global rewards1
-    old_cle = True
+def play1(a, e, first, second, learn, o):
+    """This function manages playing but with the RL agent going first"""
+    # learn=0 if first is the agent, 1 if second is the agent, 2 if neither are, 3 if both are
+    # Initializing the action-value dictionary, and the empty board.
     old_alt = None
     current = Board(0)
 
     while True:
-        current, current_alt, cle = reinforce(current, e=e)
-        # print(current, '\n')
-        state_1 = current.win_lose()
-        if state_1 in ['win', 'lose', 'draw']:
-            if not old_cle:
-                layouts[old_alt] = layouts[old_alt] + a * (int(state_1 == 'win') - layouts[old_alt])
-            rewards1.append(int(state_1 == 'win'))
-            return state_1
+        # the agent takes an action, the board status is checked
+        current = first(current, e=e, o=o)
+        state, alto = decider(current, old_alt, a, learn=learn)
+        if learn == 0:
+            current_alt = alto
+        if state != 3:
+            return state
 
-        if state_1 == 'even' and not old_cle:
-            layouts[old_alt] = layouts[old_alt] + a * (layouts[current_alt] - layouts[old_alt])
-        current = opponent(current)
-        state_1 = current.win_lose()
-
-        if state_1 in ['win', 'lose', 'draw']:
-            if not old_cle:
-                layouts[old_alt] = layouts[old_alt] + a * (int(state_1 == 'win') - layouts[old_alt])
-            rewards1.append(int(state_1 == 'win'))
-            return state_1
-
+        # Opponent takes an action
+        current = second(current, e=e, o=not o)
+        state, alto = decider(current, old_alt, a, learn=learn)
+        if learn == 1:
+            current_alt = alto
+        if state != 3:
+            return state
         old_alt = current_alt
-        old_cle = cle
-
-
-def play2(a, e, opponent):
-    global layouts
-    global rewards2
-    old_cle = True
-    old_alt = None
-    current = Board(0)
-
-    while True:
-        current = opponent(current)
-        if current == Board(449):
-            print("PROBLEM2\n", current)
-        # print(current, '\n')
-        state_1 = current.win_lose()
-        if state_1 in ['win', 'lose', 'draw']:
-            if not old_cle:
-                layouts[old_alt] = layouts[old_alt] + a * (int(state_1 == 'win') - layouts[old_alt])
-            rewards2.append(int(state_1 == 'win'))
-            return state_1
-
-        current, current_alt, cle = reinforce(current, e=e)
-        # cles.append(int(cle))
-        state_1 = current.win_lose()
-
-        if state_1 in ['win', 'lose', 'draw']:
-            if not old_cle:
-                layouts[old_alt] = layouts[old_alt] + a * (int(state_1 == 'win') - layouts[old_alt])
-            rewards2.append(int(state_1 == 'win'))
-            return state_1
-
-        if state_1 == 'even' and not old_cle:
-            layouts[old_alt] = layouts[old_alt] + a * (layouts[current_alt] - layouts[old_alt])
-        old_alt = current_alt
-        old_cle = cle
 
 
 def chart_maker(steps=600):
@@ -150,7 +96,7 @@ def chart_maker(steps=600):
     to_train("Reinforced vs Random  Epsilon=0.2", steps=steps, save=True, e=0.2)
     to_train("Reinforced vs Random  Epsilon=0.02", steps=steps, save=True, e=0.02)
     to_train("Reinforced vs Enhanced Random  Epsilon=0.2", steps=steps, save=True, e=0.2, opponent=rand_enhance)
-    to_train("Reinforced vs Enhanced Random  Epsilon=0.02", steps=steps, save=True, e=0.02, opponent=rand_enhance)
+    to_train("Reinforced vs Enhanced Random s[old_alt] Epsilon=0.02", steps=steps, save=True, e=0.02, opponent=rand_enhance)
 
     with open("layouts.csv", "w", newline='') as file:
         writer = csv.writer(file, delimiter=',')
@@ -163,13 +109,14 @@ def chart_maker(steps=600):
 
 
 def demo(stdscr):
+    """ Demo mode for tictactoe. Train the agent first with to_train("label", opponent=rand_enhance, steps=3000)"""
     global layouts
 
     curses.curs_set(0)
     current = Board(0)
     dicto = {'win': 'LOSE', 'lose': 'WIN', 'draw': 'DRAW'}
     while True:
-        current, current_alt, cle = reinforce(current, e=0)
+        current = reinforce(current, e=0)
         state_1 = current.win_lose()
         if state_1 in ['win', 'lose', 'draw']:
             stdscr.clear()
@@ -203,7 +150,7 @@ def demo(stdscr):
             elif position > 0 and key == curses.KEY_LEFT:
                 position -= 1
 
-            act=actions[position]
+            act = actions[position]
             opp_act_str = ''.join([dict2[k] for k in act.string])
             opp_act = Board(rebase(opp_act_str, False))
             if key != curses.KEY_ENTER and key not in [10, 13]:
@@ -223,3 +170,24 @@ def demo(stdscr):
             stdscr.refresh()
             time.sleep(3)
             break
+
+
+def decider(current, old_alt, a=0, learn=0):
+    """Returns 0 for win, 1 for loss, 2 for draw, 3 for even"""
+    # state=0 ==> 'win', state=1 ==> 'lose', state==2 ==>'draw', state=3 ==> 'even' = in play
+    index_dict = {'win': 0, 'lose': 1, 'draw': 2, 'even': 3}
+    state = index_dict[current.win_lose()]
+    _, current_alt = check_in(current)
+    if learn <= 1:
+        # if the game has ended
+        if state in [0, 1, 2]:
+            # layouts[old_alt] = layouts[old_alt] + a * (int(state == 1) - layouts[old_alt])
+            if learn == 0:
+                layouts[old_alt] = layouts[old_alt] + a * (int(state == 0) - layouts[old_alt])
+                rewards1.append(int(state == 0))
+            elif learn == 1:
+                layouts[old_alt] = layouts[old_alt] + a * (int(state == 0) - layouts[old_alt])
+                rewards2.append(int(state == 0))
+        elif state == 3 and old_alt is not None:
+            layouts[old_alt] = layouts[old_alt] + a * (layouts[current_alt] - layouts[old_alt])
+    return state, current_alt

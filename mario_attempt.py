@@ -1,6 +1,5 @@
 """
-This is my try at coding DQN for Mario.
-I have limited time but I want to give it a shot.
+This is our collaborative file for getting Mario to work.
 """
 
 import gym_super_mario_bros
@@ -21,19 +20,23 @@ import torch.optim as optim
 import torch.nn.functional as funct
 import torchvision.transforms as trans
 
-
+# Using the pixelated version of Super Mario Bros
 env = gym.make('SuperMarioBros-v2')
 env = JoypadSpace(env, RIGHT_ONLY)
 # if gpu is to be used
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
 
 Transition = namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward'))
 
 
 class ReplayMemory(object):
-
+    """
+    Storing transitions to be sampled when training the network.
+    This approach avoids feedback loops that can occur if transitions
+    do not obey the independent, identically distributed assumption of
+    the deep neural network.
+    """
     def __init__(self, capacity):
         self.capacity = capacity
         self.memory = []
@@ -47,6 +50,7 @@ class ReplayMemory(object):
         self.position = (self.position + 1) % self.capacity
 
     def sample(self, batch_size):
+        """This can be changed to reflect the prioritized experience replay paper"""
         return random.sample(self.memory, batch_size)
 
     def __len__(self):
@@ -54,10 +58,12 @@ class ReplayMemory(object):
 
 
 class DQN(nn.Module):
-
+    """
+    Convolutional neural network that converts from an image into actions.
+    """
     def __init__(self, h, w, outputs):
         super(DQN, self).__init__()
-        self.conv1 = nn.Conv2d(1, 16, kernel_size=5, stride=2)
+        self.conv1 = nn.Conv2d(3, 16, kernel_size=5, stride=2)
         self.bn1 = nn.BatchNorm2d(16)
         self.conv2 = nn.Conv2d(16, 32, kernel_size=5, stride=2)
         self.bn2 = nn.BatchNorm2d(32)
@@ -81,10 +87,9 @@ class DQN(nn.Module):
         x = funct.relu(self.bn3(self.conv3(x)))
         return self.head(x.view(x.size(0), -1))
 
-
+"""Converts to grayscale and reduces the resolution to be processed."""
 resize = trans.Compose([trans.ToPILImage(),
-                        trans.Resize(40, interpolation=Image.NEAREST),
-                        trans.Grayscale(),
+                        trans.Resize(56, interpolation=Image.NEAREST),
                         trans.ToTensor()])
 
 
@@ -96,7 +101,7 @@ def get_screen():
     screen = screen[:, screen_height*2//5:]
     # Convert to float, rescale, convert to torch tensor
     # (this doesn't require a copy)
-    screen = np.ascontiguousarray(screen, dtype=np.float32)
+    screen = np.ascontiguousarray(screen, dtype=np.float32) / 256
     screen = torch.from_numpy(screen)
     # Resize, and add a batch dimension (BCHW)
     a=resize(screen).unsqueeze(0).to(device)
@@ -111,7 +116,7 @@ plt.title('Example extracted screen')
 plt.show()
 
 
-BATCH_SIZE = 128
+BATCH_SIZE = 32
 GAMMA = 0.999
 EPS_START = 0.1
 EPS_END = 0.1
@@ -140,6 +145,7 @@ steps_done = 0
 
 
 def select_action(state):
+    """ Selects an action according to an Epsilon Greedy policy """
     global steps_done
     sample = random.random()
     eps_threshold = EPS_START
@@ -177,11 +183,9 @@ def plot_rewards():
 def optimize_model():
     if len(memory) < BATCH_SIZE:
         return
-    # taking random sample from replay memory, this can be improved
+    # taking random sample from replay memory, this can be improved according to
+    # the 2016 paper prioritized experience replay
     transitions = memory.sample(BATCH_SIZE)
-    # Transpose the batch (see https://stackoverflow.com/a/19343/3343043 for
-    # detailed explanation). This converts batch-array of Transitions
-    # to Transition of batch-arrays.
     batch = Transition(*zip(*transitions))
 
     # Compute a mask of non-final states and concatenate the batch elements
@@ -209,8 +213,8 @@ def optimize_model():
     # Compute the expected Q values
     expected_state_action_values = (next_state_values * GAMMA) + reward_batch
 
-    # Compute Huber loss
-    loss = funct.smooth_l1_loss(state_action_values, expected_state_action_values.unsqueeze(1))
+    # Compute MSE loss
+    loss = funct.mse_loss(state_action_values, expected_state_action_values.unsqueeze(1))
 
     # Optimize the model
     optimizer.zero_grad()
@@ -220,14 +224,14 @@ def optimize_model():
     optimizer.step()
 
 
-num_episodes = 5
-a=time.perf_counter()
+num_episodes = 100
+a = time.perf_counter()
 for i_episode in range(num_episodes):
     # Initialize the environment and state
     env.reset()
     last_screen = get_screen()
     current_screen = get_screen()
-    state = current_screen - last_screen
+    state = current_screen
     old_x = 0
     new_x = 0
     for t in count():
@@ -247,7 +251,7 @@ for i_episode in range(num_episodes):
         last_screen = current_screen
         current_screen = get_screen()
         if not done:
-            next_state = current_screen - last_screen
+            next_state = current_screen
         else:
             next_state = None
 
@@ -266,7 +270,7 @@ for i_episode in range(num_episodes):
     # Update the target network, copying all weights and biases in DQN
     if i_episode % TARGET_UPDATE == 0:
         target_net.load_state_dict(policy_net.state_dict())
-    print(f"{i_episode} episodes are complete, mario has progressed {old_x} to the right, and {t} frames have occurred.")
+    print(f"{i_episode+1} episodes are complete, marios x-value is {old_x}, and {t} frames have elapsed.")
 b = time.perf_counter()
 print(f"Took {int(b-a)} seconds to run {num_episodes} episodes.")
 print('Complete')
