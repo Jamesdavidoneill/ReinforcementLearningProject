@@ -49,9 +49,6 @@ class Board:
             for j in wins:
 
                 anded = [int(now[m] == '1' and j[m] == 1) for m in range(9)]
-                # print(anded, j, layout)
-                # print('now:',now)
-                # print('j  :', j)
                 if anded == j:
                     return True
         return False

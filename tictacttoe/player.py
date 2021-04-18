@@ -2,7 +2,7 @@ from initializer import *
 from numpy import random
 
 
-def random_player(board, o=False):
+def random_player(board, o=False, **_):
     # plays tictactoe randomly, no policy.
     actions = board.actions(o)
     try:
@@ -12,7 +12,7 @@ def random_player(board, o=False):
     return act
 
 
-def rand_enhance(board, o=False):
+def rand_enhance(board, o=False, **_):
     actions = board.actions(o)
     prefs = [0.5] * len(actions)
     for i in range(len(actions)):
@@ -32,49 +32,31 @@ def rand_enhance(board, o=False):
     return actions[option]
 
 
-def reinforce(board, e=0.1):
+def reinforce(board, e=0.1, o=True):
     #  always plays o's
     global layouts
     # look for available actions
-    actions = board.actions(True)
+    actions = board.actions(o)
     crit = random.rand()
     if crit < e:
         # take non greedy action => don't update the previous preference
-        action = actions[random.randint(len(actions))]
-        in_bool, action_alt = check_in(action)
-        if not in_bool:
-            print("PROBLEM 1")
+        action = random.choice(actions)
 
     else:
         prefs = []
         alts = []
         # Try all the actions and all their symmetries to find their layouts score
         for i in actions:
-            in_bool, actual = check_in(i)
-            if not in_bool:
-                print("PROBLEM 2")
+            _, actual = check_in(i)
             prefs.append(layouts[actual])
             alts.append(actual)
 
         maxes2 = [k for k in range(len(prefs)) if prefs[k] == max(prefs)]
 
         # print(maxes2, np.random.randint(len(maxes2)))
-        try:
-            option = maxes2[random.randint(len(maxes2))]
-        except ValueError:
-            option = 0
+        option = random.choice(maxes2)
 
         action = actions[option]
-        action_alt = alts[option]
 
-    return action, action_alt, crit < e
+    return action
 
-
-def asker(current):
-    # Where can I put my x's
-    actions = current.actions(False)
-    for i in range(len(actions)):
-        print(i, str(layouts[check_in(actions[i])[1]]), '\n' + str(actions[i]))
-    board = actions[int(input("Enter your choice: "))]
-
-    return board
